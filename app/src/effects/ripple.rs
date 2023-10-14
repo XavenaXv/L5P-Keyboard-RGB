@@ -180,24 +180,27 @@ impl Ripple {
 
         while !manager.stop_signals.manager_stop_signal.load(Ordering::SeqCst) {
             match rx.try_recv() {
-                Ok(event) => match event {
-                    Event::KeyPress(key) => {
-                        for (i, zone) in key_zones.iter().enumerate() {
-                            if zone.contains(&key) {
-                                zone_pressed[i].insert(key);
+                Ok(event) => {
+                    match event {
+                        Event::KeyPress(key) => {
+                            for (i, zone) in key_zones.iter().enumerate() {
+                                if zone.contains(&key) {
+                                    zone_pressed[i].insert(key);
+                                    zone_state[i] = RippleMove::Center;
+                                }
+                            }
+                            manager.stop_signals.keyboard_stop_signal.store(false, Ordering::SeqCst);
+                        }
+                        Event::KeyRelease(key) => {
+                            for (i, zone) in key_zones.iter().enumerate() {
+                                if zone.contains(&key) {
+                                    zone_pressed[i].remove(&key);
+                                    zone_state[i] = RippleMove::Off; // Reset zone when the key is released
+                                }
                             }
                         }
-
-                        manager.stop_signals.keyboard_stop_signal.store(false, Ordering::SeqCst);
                     }
-                    Event::KeyRelease(key) => {
-                        for (i, zone) in key_zones.iter().enumerate() {
-                            if zone.contains(&key) {
-                                zone_pressed[i].remove(&key);
-                            }
-                        }
-                    }
-                },
+                }
                 Err(err) => {
                     if let crossbeam_channel::TryRecvError::Disconnected = err {
                         break;
@@ -206,12 +209,6 @@ impl Ripple {
             }
 
             zone_state = advance_zone_state(zone_state, &mut last_step_time, &p.speed);
-
-            for (i, pressed) in zone_pressed.iter().enumerate() {
-                if !pressed.is_empty() {
-                    zone_state[i] = RippleMove::Center;
-                }
-            }
 
             let rgb_array = p.rgb_array();
             let mut final_arr: [u8; 12] = [0; 12];
